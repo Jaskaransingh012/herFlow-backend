@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
 
 const CycleSchema = new mongoose.Schema({
-  userId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    unique: true
   },
   cycleStartDate: { type: Date, required: true },
   cycleEndDate: { type: Date, required: true },
@@ -22,18 +23,25 @@ const CycleSchema = new mongoose.Schema({
       additionalNotes: { type: String }
     }
   ],
-  predictions: {
-    nextCycleStart: { type: Date },
-    nextOvulationDate: { type: Date },
-    fertileWindow: [{ type: Date }] // Array of dates indicating fertile period
-  },
   lifestyleFactors: {
     sleepHours: { type: Number }, // Average sleep duration
     stressLevel: { type: String, enum: ['Low', 'Moderate', 'High'] },
     exerciseRoutine: { type: String, enum: ['Sedentary', 'Light', 'Moderate', 'Intense'] }
   },
-  createdAt: { type: Date, default: Date.now }
+  predictions: {
+    nextCycleStart: { type: Date }, // Predicted start date of the next cycle
+    nextOvulationDate: { type: Date }, // Predicted ovulation date
+    fertileWindow: [{ type: Date }], // Array of 5 dates indicating the fertile period
+    nextPeriodDate: { type: Date }, // Predicted start date of the next period
+    nextCyclePhases: [{
+      date: { type: Date, required: true }, // Date of the phase
+      phase: { type: String, required: true } // Phase name (e.g., "Menstruation", "Ovulation")
+    }],
+    sleepRecommendations: { type: String }, // Sleep duration range (e.g., "7-9 hours")
+    lifestyleChangeRecommendations: { type: String } // Short lifestyle tips (1-2 sentences)
+  },
+  createdAt: { type: Date, default: Date.now } // Timestamp of when the record was created
 });
 
-const Cycle =  mongoose.model('Cycle', CycleSchema);
+const Cycle = mongoose.model('Cycle', CycleSchema);
 module.exports = Cycle;

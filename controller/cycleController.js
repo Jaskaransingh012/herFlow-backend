@@ -1,5 +1,6 @@
 const Cycle = require('../models/cycleModel');
 const {generateCyclePredictions} = require('../config/openAi');
+const User = require('../models/userModel');
 
 const calculateCycleLength = (startDate, endDate) => {
     const start = new Date(startDate);
@@ -12,71 +13,75 @@ const calculateCycleLength = (startDate, endDate) => {
 
 
 const createCycle = async (req, res) => {
-    try {
-      const { userId, cycleStartDate, cycleEndDate, ...rest } = req.body;
-  
-      // Validation
-      if (!userId || !cycleStartDate || !cycleEndDate) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Missing required fields: userId, cycleStartDate, cycleEndDate' 
-        });
-      }
-  
-      const startDate = new Date(cycleStartDate);
-      const endDate = new Date(cycleEndDate);
-      
-      if (isNaN(startDate) || isNaN(endDate)) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid date format' 
-        });
-      }
-      if (endDate < startDate) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'cycleEndDate must be after cycleStartDate' 
-        });
-      }
-  
-      // Generate AI predictions
-      const predictionData = {
-        cycleStartDate,
-        cycleEndDate,
-        lutealPhaseLength: rest.lutealPhaseLength || 14,
-        symptoms: rest.symptoms || [],
-        lifestyleFactors: rest.lifestyleFactors || {}
-      };
-      console.log("first");
-      const predictions = await generateCyclePredictions(predictionData);
-      console.log(predictions);
-  
-      // Create cycle
-      const newCycle = new Cycle({
-        userId,
-        cycleStartDate: startDate,
-        cycleEndDate: endDate,
-        cycleLength: calculateCycleLength(startDate, endDate),
-        ...rest,
-        predictions: predictions || {}
-      });
-  
-      await newCycle.save();
-      
-      res.status(201).json({ 
-        success: true, 
-        message: 'Cycle created successfully', 
-        data: newCycle 
-      });
-  
-    } catch (error) {
-      res.status(500).json({ 
+  try {
+    const { userId, ...cycleData } = req.body;
+    
+    // Validation
+    if (!userId) {
+      return res.status(400).json({ 
         success: false, 
-        message: 'Server error creating cycle',
-        error: error.message 
+        message: 'userId is required' 
       });
     }
-  };
+
+    // Check for existing cycle
+    const existingCycle = await Cycle.findOne({ userId });
+    console.log(existingCycle);
+    if (existingCycle) {
+      return res.status(400).json({
+        success: false,
+        message: 'User already has a cycle. Update or delete existing cycle first.'
+      });
+    }
+
+    // Calculate cycle length
+    console.log(cycleData.cycleStartDate, cycleData.cycleEndDate);
+    const cycleLength = calculateCycleLength(cycleData.cycleStartDate, cycleData.cycleEndDate);
+    console.log(cycleLength);
+
+    // Generate predictions
+    const predictions = await generateCyclePredictions({
+      ...cycleData,
+      cycleLength
+    });
+
+    // Create new cycle
+    const newCycle = new Cycle({
+      userId,
+      ...cycleData,
+      cycleLength,
+      predictions: predictions || {}
+    });
+
+    await newCycle.save();
+
+    // Update user's cycle reference
+    await User.findByIdAndUpdate(userId, { cycle: newCycle._id });
+
+    res.status(201).json({
+      success: true,
+      message: 'Cycle created successfully',
+      data: newCycle
+    });
+
+  } catch (error) {
+    
+    console.log(error.message)// Handle unique constraint violation
+    if (error.code === 11000) { 
+      return res.status(400).json({
+        success: false,
+        message: 'User can only have one cycle',
+        error: error.message
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Server error creating cycle',
+      error: error.message
+    });
+  }
+};
+
 
 const getCycleById = async (req, res) => {
     try {
